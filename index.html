@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html>
+
+<head lang="ja">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://cdn.simplecss.org/simple.min.css">
+    <style>
+        button {
+            width: 100%;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            row-gap: 4px;
+        }
+
+        .button-container {
+            display: flex;
+            flex-direction: row;
+            justify-content: space-evenly;
+            column-gap: 4px;
+        }
+    </style>
+    <title>Simple GPS Logger</title>
+</head>
+
+<body>
+    <main>
+        <div class="container">
+            <button id="btnInit">初期化</button>
+            <div class="button-container">
+                <button id="btnStart" disabled>開始</button>
+                <button id="btnStop" disabled>停止</button>
+            </div>
+            <div class="button-container">
+                <button id="btnClipboard" disabled>クリップボード</button>
+                <button id="btnDL" disabled>ダウンロード</button>
+            </div>
+            <h4 id="idStatus" style="width:100%;text-align: center;"></h4>
+            <div id="idLatest"></div>
+        </div>
+    </main>
+</body>
+<script>
+    document.addEventListener("DOMContentLoaded", () => {
+        const data = {
+            watchId: null,
+            enabled: false,
+            logs: [],
+            wakerLock: null
+        };
+        document.getElementById("btnInit").addEventListener("click", () => { initLogger(data); });
+        document.getElementById("btnStart").addEventListener("click", () => {
+            data.enabled = true;
+            showStatus(data);
+        });
+        document.getElementById("btnStop").addEventListener("click", () => {
+            data.enabled = false;
+            showStatus(data);
+        });
+        document.getElementById("btnClipboard").addEventListener("click", async () => {
+            if (data.logs.length === 0) return;
+            const logText = data.logs.join("\n");
+            try {
+                await navigator.clipboard.writeText(logText);
+            } catch (error) {
+                window.alert(error);
+            }
+        });
+        document.getElementById("btnDL").addEventListener("click", () => {
+            if (data.logs.length === 0) return;
+            const logText = data.logs.join("\n");
+
+            const a = document.createElement("a");
+            let url = null;
+            try {
+                const blob = new Blob([logText], {
+                    type: "application/octet-stream"
+                });
+                url = URL.createObjectURL(blob);
+
+                const filename = "gnss_log.txt";
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            } catch (error) {
+                a.href = undefined;
+            } finally {
+                if (url != null) URL.revokeObjectURL(url);
+            }
+        });
+    });
+
+    function showStatus(data) {
+        const cntl = document.getElementById("idStatus");
+        cntl.textContent
+            = (data.enabled ? "記録中" : "停止中")
+            + " "
+            + (data.logs.length.toString() / 2) + "件"
+            ;
+    }
+
+    /**
+     * @param {number | null} val
+     * @return {number | null}
+     */
+    function toKMH(val) {
+        if (val == null) return null;
+        return ((val * 3600) / 1000);
+    }
+
+    /**
+     * @param {number | null} val
+     * @return {string | null}
+     */
+    function toHeadingStr(val) {
+        if (val == null) return null;
+
+        const dir = ["北", "北北東", "北東", "東北東", "東",
+            "東南東", "南東", "南南東", "南",
+            "南南西", "南西", "西南西", "西",
+            "西北西", "西北", "北北西",
+        ];
+        const index = Math.floor((val + 15) / 15) % dir.length;
+        return dir[index];
+    }
+
+    /**
+     * 
+     * @param {GeolocationPosition} position
+     */
+    function showLatest(position) {
+        const cntl = document.getElementById("idLatest");
+        const p = document.createElement("p");
+        const lines = [];
+        lines.push("日時:" + new Date(position.timestamp).toISOString());
+        lines.push(
+            (position.coords.latitude < 0 ? "南緯" : "北緯")
+            + ":" + Math.abs(position.coords.latitude.toFixed(5))
+        );
+        lines.push(
+            (position.coords.longitude < 0 ? "西経" : "東経")
+            + ":" + Math.abs(position.coords.longitude.toFixed(5))
+        );
+        lines.push(
+            "高度:" + (position.coords.altitude?.toFixed(3) ?? "--") + "m"
+        );
+        lines.push(
+            "速度:" + (toKMH(position.coords.speed)?.toFixed(3) ?? "--") + "km/h"
+        );
+        lines.push(
+            "方位:" + (toHeadingStr(position.coords.heading) ?? "--")
+            + "(" + (position.coords.heading?.toFixed(2) ?? "") + ")"
+        );
+
+        lines.forEach((line) => {
+            const s = document.createElement("span");
+            s.textContent = line;
+            p.appendChild(s);
+            p.appendChild(document.createElement("br"));
+        });
+        while (cntl.firstChild) {
+            cntl.removeChild(cntl.firstChild);
+        }
+        cntl.appendChild(p);
+    }
+
+    function initLogger(data) {
+        // 画面をONのままにする
+        navigator.wakeLock.request("screen").then((lock) => {
+            data.wakerLock = lock;
+        }).catch((reason) => {
+            console.warn(reason);
+            data.wakeLock = null;
+        });
+
+        const geo = navigator.geolocation;
+        if (geo == null) {
+            window.alert("位置情報が使用できません");
+            return;
+        }
+        if (data.watchId != null) {
+            geo.clearWatch(data.watchId);
+            data.watchId = null;
+        }
+
+        let first = true;
+        data.enabled = false;
+        data.logs = [];
+        data.watchId = geo.watchPosition(
+            (p) => {
+                showLatest(p);
+                onPositionUpdate(p, data);
+                if (first) {
+                    first = false;
+                    ["btnStart", "btnStop", "btnClipboard", "btnDL"].forEach((id) => {
+                        const c = document.getElementById(id);
+                        c.removeAttribute("disabled");
+                    });
+                }
+            },
+            (e) => {
+                geo.clearWatch(data.watchId);
+                data.watchId = null;
+                window.alert(e.message);
+            },
+            { enableHighAccuracy: true }
+        );
+        showStatus(data);
+
+    }
+
+    /**
+     * @param {GeolocationPosition} position
+     * @param {any} data
+     */
+    function onPositionUpdate(position, data) {
+        if (!data.enabled) return;
+        data.logs.push(toGSASentence(position));
+        data.logs.push(toRMCSentence(position));
+        showStatus(data);
+    }
+
+    /**
+     * @param {number | null} ms m/s
+     * @return {number} knot
+     */
+    function toKnot(ms) {
+        if (ms == null) return 0;
+        return ms / 0.514444;
+    }
+
+    /**
+     * @param {number} val
+     */
+    function toDegMin(val) {
+        const deg = Math.floor(val);
+        const min = (val - deg) * 60.0;
+        return deg * 100 + min;
+    }
+
+    /**
+     * @param {number} timestamp
+     */
+    function toDateTimeStr(timestamp) {
+
+        const dt = new Date(timestamp);
+        const dtFormatter = new Intl.DateTimeFormat("en-US", {
+            year: "2-digit",
+            month: "2-digit",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+            hour12: false,
+            fractionalSecondDigits: 3,
+        });
+        const dtParts = dtFormatter.formatToParts(dt);
+        const timeStr =
+            dtParts.find((v) => v.type === "hour").value
+            + dtParts.find((v) => v.type === "minute").value
+            + dtParts.find((v) => v.type === "second").value
+            + "." + dtParts.find((v) => v.type === "fractionalSecond").value
+            ;
+        const dateStr =
+            dtParts.find((v) => v.type === "day").value
+            + dtParts.find((v) => v.type === "month").value
+            + dtParts.find((v) => v.type === "year").value
+            ;
+        return {
+            date: dateStr,
+            time: timeStr
+        };
+    }
+
+    /**
+     * @param {string} str ascii
+     * @param {string} 2digit string
+     */
+    function calcCheckSum(str) {
+        let sum = 0;
+
+        for (let i = 0; i < str.length; i++) {
+            sum = sum ^ str.charCodeAt(i) & 0xFF;
+        }
+
+        return (sum < 16 ? "0" : "") + sum.toString(16).toUpperCase()
+    }
+
+    /**
+     * @param {GeolocationPosition} position
+     * @return {string}
+     */
+    function toRMCSentence(position) {
+        const dirLng = position.coords.longitude >= 0 ? "E" : "W";
+        const dirLat = position.coords.latitude >= 0 ? "N" : "S";
+        const dateTimeStr = toDateTimeStr(position.timestamp);
+
+        const body = ["GPRMC",
+            dateTimeStr.time, // 時刻hhmmss.ss
+            "A", // データ有効
+            toDegMin(Math.abs(position.coords.latitude)).toFixed(7), // 緯度
+            dirLat, // 
+            toDegMin(Math.abs(position.coords.longitude)).toFixed(7), // 経度
+            dirLng,
+            toKnot(position.coords.speed).toFixed(2),
+            (position.coords.heading?.toFixed(2) ?? "0"),
+            dateTimeStr.date, // 日付ddmmyy
+            "-",
+            "-",
+            "A", // 単独測位
+            "V" // 
+        ].join(",");
+        const checksum = calcCheckSum(body);
+
+        return "$" + body + "*" + checksum;
+    }
+
+    /**
+     * @param {GeolocationPosition} position
+     * @return {string}
+     */
+    function toGSASentence(position) {
+        const dirLng = position.coords.longitude >= 0 ? "E" : "W";
+        const dirLat = position.coords.latitude >= 0 ? "N" : "S";
+        const dateTimeStr = toDateTimeStr(position.timestamp);
+
+        const body = ["GPGGA",
+            dateTimeStr.time, // 時刻hhmmss.ss
+            toDegMin(Math.abs(position.coords.latitude)).toFixed(7), // lat
+            dirLat, // 
+            toDegMin(Math.abs(position.coords.longitude)).toFixed(7), // lat
+            dirLng,
+            "1", // 単独測位
+            "12", // 使用衛星数
+            "0", // 精度劣化水平成分
+            position.coords.altitude?.toFixed(3) ?? "0", // アンテナ海抜高度
+            "M", //
+            "36.7071", // ジオイド高(日本水準原点)
+            "M", // 
+            "0.0", // 
+            "-",
+            "V" // 
+        ].join(",");
+        const checksum = calcCheckSum(body);
+
+        return "$" + body + "*" + checksum;
+
+    }
+</script>
+
+</html>
