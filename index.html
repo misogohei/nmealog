@@ -62,7 +62,7 @@
         });
         document.getElementById("btnClipboard").addEventListener("click", async () => {
             if (data.logs.length === 0) return;
-            const logText = data.logs.join("\n");
+            const logText = data.logs.join("\r\n");
             try {
                 await navigator.clipboard.writeText(logText);
             } catch (error) {
@@ -71,7 +71,7 @@
         });
         document.getElementById("btnDL").addEventListener("click", () => {
             if (data.logs.length === 0) return;
-            const logText = data.logs.join("\n");
+            const logText = data.logs.join("\r\n");
 
             const a = document.createElement("a");
             let url = null;
@@ -125,7 +125,10 @@
             "南南西", "南西", "西南西", "西",
             "西北西", "西北", "北北西",
         ];
-        const index = Math.floor((val + 15) / 15) % dir.length;
+        const step = 22.25;
+        const offset = step / 2.0;
+        const index = Math.floor((val + offset) / step) % dir.length;
+
         return dir[index];
     }
 
@@ -342,7 +345,7 @@
             "M", //
             "36.7071", // ジオイド高(日本水準原点)
             "M", // 
-            "0.0", // 
+            "0", // 
             "-",
             "V" // 
         ].join(",");
