@@ -3,7 +3,7 @@
 ブラウザの[位置情報API](https://developer.mozilla.org/ja/docs/Web/API/Geolocation_API)を使用して取得したデータを[NMEA 0183](https://ja.wikipedia.org/wiki/NMEA_0183)の形式に変換します。
 
 ## 公開ページ
-https://misogohei.github.io/nmealog/
+https://misogohei.github.io/nmealog/ <br/>
 取得した位置情報はブラウザ上で処理され外部へは送信しません。
 
 ## 機能
@@ -20,7 +20,7 @@ https://misogohei.github.io/nmealog/
 
 取得できないデータは仮の値が固定で設定されます。
 - 衛星数(12)
-- ジオイド高さ(36.7071)
+- ジオイド高(36.7071)
 - 測位ステータス(1)
 - など
 
