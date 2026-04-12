@@ -97,11 +97,7 @@
 
     function showStatus(data) {
         const cntl = document.getElementById("idStatus");
-        cntl.textContent
-            = (data.enabled ? "記録中" : "停止中")
-            + " "
-            + (data.logs.length.toString() / 2) + "件"
-            ;
+        cntl.textContent = `${data.enabled ? "記録中" : "停止中"} ${data.logs.length / 2}件`;
     }
 
     /**
@@ -140,24 +136,21 @@
         const cntl = document.getElementById("idLatest");
         const p = document.createElement("p");
         const lines = [];
-        lines.push("日時:" + new Date(position.timestamp).toISOString());
+        lines.push(`日時:${new Date(position.timestamp).toISOString()}`);
         lines.push(
-            (position.coords.latitude < 0 ? "南緯" : "北緯")
-            + ":" + Math.abs(position.coords.latitude.toFixed(5))
+            `${position.coords.latitude < 0 ? "南緯" : "北緯"}:${Math.abs(position.coords.latitude.toFixed(5))}`
         );
         lines.push(
-            (position.coords.longitude < 0 ? "西経" : "東経")
-            + ":" + Math.abs(position.coords.longitude.toFixed(5))
+            `${position.coords.longitude < 0 ? "西経" : "東経"}:${Math.abs(position.coords.longitude.toFixed(5))}`
         );
         lines.push(
-            "高度:" + (position.coords.altitude?.toFixed(3) ?? "--") + "m"
+            `高度:${position.coords.altitude?.toFixed(3) ?? "--"}m`
         );
         lines.push(
-            "速度:" + (toKMH(position.coords.speed)?.toFixed(3) ?? "--") + "km/h"
+            `速度:${toKMH(position.coords.speed)?.toFixed(3) ?? "--"}km/h`
         );
         lines.push(
-            "方位:" + (toHeadingStr(position.coords.heading) ?? "--")
-            + "(" + (position.coords.heading?.toFixed(2) ?? "") + ")"
+            `方位:${toHeadingStr(position.coords.heading) ?? "--"}(${position.coords.heading?.toFixed(2) ?? ""})`
         );
 
         lines.forEach((line) => {
@@ -263,17 +256,10 @@
             fractionalSecondDigits: 3,
         });
         const dtParts = dtFormatter.formatToParts(dt);
-        const timeStr =
-            dtParts.find((v) => v.type === "hour").value
-            + dtParts.find((v) => v.type === "minute").value
-            + dtParts.find((v) => v.type === "second").value
-            + "." + dtParts.find((v) => v.type === "fractionalSecond").value
-            ;
-        const dateStr =
-            dtParts.find((v) => v.type === "day").value
-            + dtParts.find((v) => v.type === "month").value
-            + dtParts.find((v) => v.type === "year").value
-            ;
+        const parts = {};
+        dtParts.forEach(part => parts[part.type] = part.value);
+        const timeStr = `${parts.hour}${parts.minute}${parts.second}.${parts.fractionalSecond}`;
+        const dateStr = `${parts.day}${parts.month}${parts.year}`;
         return {
             date: dateStr,
             time: timeStr
@@ -291,7 +277,7 @@
             sum = sum ^ str.charCodeAt(i) & 0xFF;
         }
 
-        return (sum < 16 ? "0" : "") + sum.toString(16).toUpperCase()
+        return `${sum < 16 ? "0" : ""}${sum.toString(16).toUpperCase()}`;
     }
 
     /**
@@ -320,7 +306,7 @@
         ].join(",");
         const checksum = calcCheckSum(body);
 
-        return "$" + body + "*" + checksum;
+        return `$${body}*${checksum}`;
     }
 
     /**
@@ -351,7 +337,7 @@
         ].join(",");
         const checksum = calcCheckSum(body);
 
-        return "$" + body + "*" + checksum;
+        return `$${body}*${checksum}`;
 
     }
 </script>
